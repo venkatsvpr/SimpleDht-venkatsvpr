@@ -8,6 +8,7 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
+import android.telephony.TelephonyManager;
 
 public class SimpleDhtProvider extends ContentProvider {
 
