@@ -156,8 +156,13 @@ public class SimpleDhtProvider extends ContentProvider {
             deleteMyValues();
         }
         else {
+            /*
             if (hmap.containsKey(selection)) {
                 hmap.remove(selection);
+            }
+            */
+            if (containskey(selection)) {
+                remove_data(selection);
             }
             else {
                 send_message(peer_info, selection+":"+myPort, "delete");
@@ -167,7 +172,8 @@ public class SimpleDhtProvider extends ContentProvider {
         if (peerCount == 0) {
             if (selection == "@")
             Log.d("venkat","no peers deleteting locally  for"+selection);
-            hmap.remove(selection);
+            remove_data(selection);
+        //  hmap.remove(selection);
         }
 
         // TODO Auto-generated method stub
@@ -187,7 +193,8 @@ public class SimpleDhtProvider extends ContentProvider {
         Log.d("venkat"," insert "+key_val+" "+data+" peercount "+peerCount);
         if (peerCount == 0) {
             Log.d("venkat", " insert  " + key_val + " " + data);
-            hmap.put(key_val, data);
+            put_data(key_val, data);
+            //hmap.put(key_val, data);
         }
         else {
             String hashkey = null;
@@ -196,31 +203,7 @@ public class SimpleDhtProvider extends ContentProvider {
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
             }
-              /*
 
-            for (int i =0; i<=4; i++) {
-                if (hash_remote_port_arr[i] == null) {
-                    continue;
-                }
-
-                if (hashkey.compareTo(hash_remote_port_arr[i])<0) {
-                    try {
-                        nextPort = getPort(i);
-                        break;
-                    } catch (NoSuchAlgorithmException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-
-            if (nextPort.equals(myPort)) {
-                hmap.put(key_val, data);
-            }
-            else {
-                String ret = null;
-                ret = send_message(nextPort,key_val+":"+data,"put");
-            }
-            */
             if (hash_in_range(hashkey, myPort, peer_info))
             {
                 Log.d("venkat"," forceputting in the next "+peer_info);
@@ -268,7 +251,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
 
 
-        hmap = new HashMap<String, String>();
+        //hmap = new HashMap<String, String>();
         Log.d("venkat"," Hasharray is "+Arrays.toString(hash_remote_port_arr));
         // TODO Auto-generated method stub
         return false;
@@ -278,7 +261,7 @@ public class SimpleDhtProvider extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
 
-        Log.d("venkat","query "+selection+" "+selectionArgs +" val"+hmap.get(selection));
+        //Log.d("venkat","query "+selection+" "+selectionArgs +" val"+hmap.get(selection));
         MatrixCursor mCursor = null;
         mCursor = new MatrixCursor(new String[]{"key", "value"});
 
@@ -286,7 +269,9 @@ public class SimpleDhtProvider extends ContentProvider {
             if (selection.equals("*") || selection.equals("@")) {
                 mCursor = getMyValues(mCursor);
             } else {
-                mCursor.addRow(new String[]{selection, hmap.get(selection)});
+//                mCursor.addRow(new String[]{selection, hmap.get(selection)});
+                mCursor.addRow(new String[]{selection, get_data(selection)});
+
             }
         }
         else {
@@ -337,9 +322,12 @@ public class SimpleDhtProvider extends ContentProvider {
             else {
                 Log.d("venkat"," my port is "+myPort+" next port is "+peer_info);
 
-                if (hmap.containsKey(selection)){
-                    Log.d("venkat","selection contained in hmap "+selection);
-                    mCursor.addRow(new String[]{selection, hmap.get(selection)});
+                if (containskey(selection)) {
+                //if (hmap.containsKey(selection)){
+                    // Log.d("venkat","selection contained in hmap "+selection);
+                    //mCursor.addRow(new String[]{selection, hmap.get(selection)});
+                    mCursor.addRow(new String[]{selection, get_data(selection)});
+
                 }
                 else if (!peer_info.equals("NA")) {
                     /* venkat have to fix this part */
@@ -442,24 +430,42 @@ public class SimpleDhtProvider extends ContentProvider {
         return formatter.toString();
     }
 
-    private void EmptyLocalHmap ()  {
-        for (String key : hmap.keySet()) {
-            hmap.remove(key);
-        }
-    }
 
     private MatrixCursor getMyValues (MatrixCursor mCursor) {
         Log.d("venkat", "getMyValues : myhash is " +myhash);
+
+        /*
         for (String key : hmap.keySet()) {
             Log.d("venkat",key+" : "+hmap.get(key));
             mCursor.addRow(new String[]{key , hmap.get(key)});
+        } */
+        /* Reference :
+         1) Idea : https://stackoverflow.com/questions/5694385/getting-the-filenames-of-all-files-in-a-folder
+         */
+        File dir = getContext().getFilesDir();
+        File[] files = dir.listFiles();
+
+        for (File file :files) {
+            if (file.isFile()) {
+                String key = file.getName();
+                String value = get_data(key);
+                Log.d("venkat", key+":"+value);
+                mCursor.addRow(new String[]{key , value});
+            }
         }
+
         return mCursor;
     }
 
     private void deleteMyValues () {
-        for (String key : hmap.keySet()) {
-            hmap.remove(key);
+        File dir = getContext().getFilesDir();
+        File[] files = dir.listFiles();
+
+        for (File file :files) {
+            if (file.isFile()) {
+                Log.d("venkat","deleting .."+file.getName());
+                file.delete();
+            }
         }
     }
 
@@ -623,15 +629,19 @@ public class SimpleDhtProvider extends ContentProvider {
                         String key = key_splits[0];
                         String sender = key_splits[1];
 
-                        if (hmap.containsKey(key)) {
+                        //if (hmap.containsKey(key)) {
+                        if (containskey(key)) {
                             /* have to send to this guy */
                             /* who initiated teher query */
                             DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                             out_print.writeUTF("ack");
                             out_print.flush();
 
-                            String mess2 = sender+"#"+key+":"+hmap.get(key)+"#get-reply";
-                            Log.d("venkat","going to reply back to "+sender+" for get of  key "+key+"with value "+hmap.get(key));
+                            //String mess2 = sender+"#"+key+":"+hmap.get(key)+"#get-reply";
+                            String mess2 = sender+"#"+key+":"+get_data(key)+"#get-reply";
+
+                            Log.d("venkat","going to reply back to "+sender+" for get of  key "+key+"with value "+get_data(key));
+                            //Log.d("venkat","going to reply back to "+sender+" for get of  key "+key+"with value "+hmap.get(key));
                             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
                         }
                         else if (key_splits[1].equals(peer_info))  {
@@ -657,13 +667,29 @@ public class SimpleDhtProvider extends ContentProvider {
                     }
                     else if (split_tokens[0].equals("all")) {
                         String outString = "";
+                        File dir = getContext().getFilesDir();
+                        File[] files = dir.listFiles();
+                        for (File file :files) {
+                            if (file.isFile()) {
+                                String key = file.getName();
+                                String value = get_data(key);
+                                outString += key;
+                                outString += ":";
+                                outString += value;
+                                outString += "#";
+                            }
+                        }
+
+
+                        /*
+
                         for (String key : hmap.keySet()) {
                             outString += key;
                             outString += ":";
                             outString += hmap.get(key);
                             outString += "#";
                         }
-
+                        */
                         if (outString == null)
                         {
                             outString = "ack";
@@ -675,7 +701,8 @@ public class SimpleDhtProvider extends ContentProvider {
                     else if (split_tokens[0].equals("force-put")) {
                         String keyvalue = split_tokens[1];
                         String[] new_split_tokens  = keyvalue.split(":");
-                        hmap.put(new_split_tokens[0], new_split_tokens[1]);
+                        put_data(new_split_tokens[0], new_split_tokens[1]);
+                        //hmap.put(new_split_tokens[0], new_split_tokens[1]);
                         Log.d("venkat","inserted into hmap "+new_split_tokens[0]+":"+new_split_tokens[1]);
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                         out_print.writeUTF("ack");
@@ -712,8 +739,13 @@ public class SimpleDhtProvider extends ContentProvider {
                                 }
                             }
                             else {
+                                /*
                                 if (hmap.containsKey(subsplit[0])) {
                                     hmap.remove(subsplit[0]);
+                                }
+                                */
+                                if (containskey(subsplit[0])) {
+                                    remove_data(subsplit[0]);
                                 }
                                 else {
                                     if (!peer_info.equals(subsplit[1])) {
