@@ -64,6 +64,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
 
     public void put_data (String key, String value) {
+        Log.d("venkat","doing put data ");
         FileOutputStream outputStream;
         try
         {
@@ -87,6 +88,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
 
     public String get_data(String selection) {
+        Log.d("venkat","doi get_data "+selection);
         String message = null;
         Log.v("query", selection);
         InputStream is = null;
@@ -113,6 +115,7 @@ public class SimpleDhtProvider extends ContentProvider {
     }
 
     public boolean containskey (String selection) {
+        Log.d("venkat","going to do contains key"+selection);
         InputStream is = null;
         try {
             is = getContext().openFileInput(selection);
@@ -128,7 +131,17 @@ public class SimpleDhtProvider extends ContentProvider {
         }
         return false;
     }
-    
+
+    public void remove_data (String selection) {
+        Log.d("venkat","going to do remove_Data on "+selection);
+        File directory = getContext().getFilesDir();
+        File file = new File(directory, selection);
+        if (file.exists()) {
+            Log.d("venkat","file exists  deleting the same");
+            file.delete();
+        }
+        return;
+    }
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         Log.d("venkat","delete "+selection+" "+selectionArgs);
