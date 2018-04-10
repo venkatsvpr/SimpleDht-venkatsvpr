@@ -332,11 +332,12 @@ public class SimpleDhtProvider extends ContentProvider {
                 else if (!peer_info.equals("NA")) {
                     /* venkat have to fix this part */
                     /* some locking mechanisim have to be devised */
-                            send_message(peer_info, selection + ":" + myPort, "get");
-                            Log.d("venkat","entering sync block");
-                            synchronized (querylock) {
-                            try {
-                                Log.d("venkat","waiting on lock at query for "+selection);
+                    synchronized (querylock) {
+                                   try {
+                                 send_message(peer_info, selection + ":" + myPort, "get");
+                                 Log.d("venkat","entering sync block");
+
+                                 Log.d("venkat","waiting on lock at query for "+selection);
                                 querylock.wait();
                                 Log.d("venkat","lock obtained ....");
                             } catch (InterruptedException e) {
@@ -382,7 +383,7 @@ public class SimpleDhtProvider extends ContentProvider {
             Log.d("venkat","send message: port: "+port+" selection: "+selection+" method:"+method);
             Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                     Integer.parseInt(port));
-            socket.setSoTimeout(500);
+            socket.setSoTimeout(1000);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             out.writeUTF(method + "#" + selection + "#" + myPort);
             out.flush();
@@ -539,8 +540,7 @@ public class SimpleDhtProvider extends ContentProvider {
         */
     }
 
-    private class  ServerTask extends AsyncTask<ServerSocket, String, Void>
-    {
+    private class  ServerTask extends AsyncTask<ServerSocket, String, Void> {
         private Uri mUri;
         private ContentResolver mContentResolver;
         private ContentValues cv = new ContentValues();
@@ -554,7 +554,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     Log.d("venkat", "Going to connect to the peer... myPort is" + myPort);
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(default_remote_port));
-                    socket.setSoTimeout(500);
+                    socket.setSoTimeout(1000);
                     DataOutputStream out = new DataOutputStream(socket.getOutputStream());
                     out.writeUTF("connect#" + myPort);
                     out.flush();
@@ -572,7 +572,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 ServerSocket serverSocket = sockets[0];
                 Socket accept = null;
                 while (true) {
-                    Log.d("venkat", "waiting to accept sockets myport is " + myPort +" peer is "+peer_info);
+                    Log.d("venkat", "waiting to accept sockets myport is " + myPort + " peer is " + peer_info);
                     accept = serverSocket.accept();
                     DataInputStream in = new DataInputStream(accept.getInputStream());
                     String message = null;
@@ -584,7 +584,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         continue;
                     }
 
-                    Log.d("venkat" ," Message is : "+message);
+                    Log.d("venkat", " Message is : " + message);
                     if (split_tokens[0].equals("connect")) {
                         peerCount += 1;
                         String peerport = split_tokens[1];
@@ -592,38 +592,36 @@ public class SimpleDhtProvider extends ContentProvider {
                             if (hash_remote_port_arr[i] == "NA") {
                                 hash_remote_port_arr[i] = genHash(avdname.get(peerport));
                                 break;
-                            }
-                            else if (hash_remote_port_arr[i].equals(genHash(avdname.get(peerport)))) {
+                            } else if (hash_remote_port_arr[i].equals(genHash(avdname.get(peerport)))) {
                                 break;
                             }
                         }
-                        Log.d ("venkat"," without sort"+Arrays.toString(hash_remote_port_arr));
+                        Log.d("venkat", " without sort" + Arrays.toString(hash_remote_port_arr));
                         Arrays.sort(hash_remote_port_arr);
-                        Log.d ("venkat"," Hash array "+Arrays.toString(hash_remote_port_arr));
-                        Log.d("venkat", "Read the  message: " + message+" from "+peerport + "hash is "+genHash(avdname.get(peerport)));
-                        Log.d("venkat"," ports in ring : "+getPort(0)+" "+getPort(1)+" "+getPort(2)+" "+getPort(3)+" "+ getPort(4));
+                        Log.d("venkat", " Hash array " + Arrays.toString(hash_remote_port_arr));
+                        Log.d("venkat", "Read the  message: " + message + " from " + peerport + "hash is " + genHash(avdname.get(peerport)));
+                        Log.d("venkat", " ports in ring : " + getPort(0) + " " + getPort(1) + " " + getPort(2) + " " + getPort(3) + " " + getPort(4));
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                         out_print.writeUTF("ack");
                         out_print.flush();
                         send_peer_information(hash_remote_port_arr);
-                    }
-                    else if (split_tokens[0].equals("get-reply")) {
+                    } else if (split_tokens[0].equals("get-reply")) {
                         synchronized (querylock) {
                             String key_string = split_tokens[1];
                             String[] key_splits = key_string.split(":");
                             String key = key_splits[0];
                             String value = key_splits[1];
-                            Log.d("venkat"," key:"+key+" value:"+value);
+                            Log.d("venkat", " key:" + key + " value:" + value);
+                            Log.d("venkat","going to notify the lock to run");
                             querybuffer.put(key, value);
-                            querylock.notify();
+                            querylock.notifyAll();
                         }
-                    }
-                    else if (split_tokens[0].equals("get")) {
+                    } else if (split_tokens[0].equals("get")) {
                         /* use the same logic for others..
                         venkat.....
                          */
 
-                        String fromPort  = split_tokens[2];
+                        String fromPort = split_tokens[2];
                         String key_string = split_tokens[1];
                         String[] key_splits = key_string.split(":");
                         String key = key_splits[0];
@@ -638,38 +636,34 @@ public class SimpleDhtProvider extends ContentProvider {
                             out_print.flush();
 
                             //String mess2 = sender+"#"+key+":"+hmap.get(key)+"#get-reply";
-                            String mess2 = sender+"#"+key+":"+get_data(key)+"#get-reply";
+                            String mess2 = sender + "#" + key + ":" + get_data(key) + "#get-reply";
 
-                            Log.d("venkat","going to reply back to "+sender+" for get of  key "+key+"with value "+get_data(key));
+                            Log.d("venkat", "going to reply back to " + sender + " for get of  key " + key + "with value " + get_data(key));
                             //Log.d("venkat","going to reply back to "+sender+" for get of  key "+key+"with value "+hmap.get(key));
                             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
-                        }
-                        else if (key_splits[1].equals(peer_info))  {
-                            Log.d("venkat","This shouldnt ever happen");
+                        } else if (key_splits[1].equals(peer_info)) {
+                            Log.d("venkat", "This shouldnt ever happen");
                             DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
-                            out_print.writeUTF(key+":"+" ");
+                            out_print.writeUTF(key + ":" + " ");
                             out_print.flush();
-                        }
-                        else {
+                        } else {
                             DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                             out_print.writeUTF("ack");
                             out_print.flush();
 
-                            String mess2 = peer_info+"#"+key_string+"#get#"+Integer.toString(count);
-                            Log.d("venkat","Message input :"+message);
+                            String mess2 = peer_info + "#" + key_string + "#get#" + Integer.toString(count);
+                            Log.d("venkat", "Message input :" + message);
                             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
                         }
-                    }
-                    else if (split_tokens[0].equals("next_info")) {
+                    } else if (split_tokens[0].equals("next_info")) {
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                         out_print.writeUTF(peer_info);
                         out_print.flush();
-                    }
-                    else if (split_tokens[0].equals("all")) {
+                    } else if (split_tokens[0].equals("all")) {
                         String outString = "";
                         File dir = getContext().getFilesDir();
                         File[] files = dir.listFiles();
-                        for (File file :files) {
+                        for (File file : files) {
                             if (file.isFile()) {
                                 String key = file.getName();
                                 String value = get_data(key);
@@ -690,41 +684,37 @@ public class SimpleDhtProvider extends ContentProvider {
                             outString += "#";
                         }
                         */
-                        if (outString == null)
-                        {
+                        if (outString == null) {
                             outString = "ack";
                         }
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                         out_print.writeUTF(outString);
                         out_print.flush();
-                    }
-                    else if (split_tokens[0].equals("force-put")) {
+                    } else if (split_tokens[0].equals("force-put")) {
                         String keyvalue = split_tokens[1];
-                        String[] new_split_tokens  = keyvalue.split(":");
+                        String[] new_split_tokens = keyvalue.split(":");
                         put_data(new_split_tokens[0], new_split_tokens[1]);
                         //hmap.put(new_split_tokens[0], new_split_tokens[1]);
-                        Log.d("venkat","inserted into hmap "+new_split_tokens[0]+":"+new_split_tokens[1]);
+                        Log.d("venkat", "inserted into hmap " + new_split_tokens[0] + ":" + new_split_tokens[1]);
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                         out_print.writeUTF("ack");
                         out_print.flush();
 
-                    }
-                    else if (split_tokens[0].equals("put")) {
+                    } else if (split_tokens[0].equals("put")) {
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                         out_print.writeUTF("ack");
                         out_print.flush();
 
                         String keyvalue = split_tokens[1];
-                        String[] new_split_tokens  = keyvalue.split(":");
-                        if (hash_in_range(genHash(new_split_tokens[0]),myPort,peer_info)) {
-                            send_message(peer_info, split_tokens[1],"force-put");
+                        String[] new_split_tokens = keyvalue.split(":");
+                        if (hash_in_range(genHash(new_split_tokens[0]), myPort, peer_info)) {
+                            send_message(peer_info, split_tokens[1], "force-put");
                         } else {
-                            send_message(peer_info, split_tokens[1],"put");
+                            send_message(peer_info, split_tokens[1], "put");
                         }
                         //hmap.put(new_split_tokens[0], new_split_tokens[1]);
 
-                    }
-                    else if (split_tokens[0].equals("delete")) {
+                    } else if (split_tokens[0].equals("delete")) {
                         String token1 = split_tokens[1];
                         String[] subsplit = token1.split(":");
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
@@ -735,10 +725,9 @@ public class SimpleDhtProvider extends ContentProvider {
                             if (subsplit[0].equals("*")) {
                                 deleteMyValues();
                                 if (!peer_info.equals(subsplit[1])) {
-                                    send_message(peer_info,token1,"delete");
+                                    send_message(peer_info, token1, "delete");
                                 }
-                            }
-                            else {
+                            } else {
                                 /*
                                 if (hmap.containsKey(subsplit[0])) {
                                     hmap.remove(subsplit[0]);
@@ -746,54 +735,110 @@ public class SimpleDhtProvider extends ContentProvider {
                                 */
                                 if (containskey(subsplit[0])) {
                                     remove_data(subsplit[0]);
-                                }
-                                else {
+                                } else {
                                     if (!peer_info.equals(subsplit[1])) {
-                                        send_message(peer_info,token1,"delete");
+                                        send_message(peer_info, token1, "delete");
                                     }
                                 }
                             }
+                        } else {
+                            Log.d("venkat", "Shouldnt be here ever!!!!!");
                         }
-                        else {
-                            Log.d("venkat","Shouldnt be here ever!!!!!");
-                        }
-                    }
-                    else if (split_tokens[0].equals("peer")) {
+                    } else if (split_tokens[0].equals("peer")) {
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
                         out_print.writeUTF("ack");
                         out_print.flush();
 
                         String data = split_tokens[1];
                         String[] subsplit = data.split(":");
+                        String current_info = peer_info;
                         peer_info = subsplit[0];
                         peerCount = Integer.parseInt(subsplit[1]);
 
+                        if (!current_info.equals("NA")) {
+                            String mess2 = current_info + "#" +myPort + ":"+ peer_info + "#rehash#";
+                            Log.d("venkat", "Message input :" + message);
+                            new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
+                        }
+                    }
+                    else if (split_tokens[0].equals("rehash")) {
+                        DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
+                        out_print.writeUTF("ack");
+                        out_print.flush();
+
+                        String temp_string = split_tokens[1];
+                        String[] new_split_tokens = temp_string.split(":");
+                        String tmessage = get_kv_range(new_split_tokens[0],new_split_tokens[1]);
+
+                        String mess2 = new_split_tokens[1] + "#" +tmessage+"#fpush#";
+                        Log.d("venkat", "Message input :" + tmessage);
+                        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
+                    }
+                    else if (split_tokens[0].equals("fpush")) {
+                        DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
+                        out_print.writeUTF("ack");
+                        out_print.flush();
+
+                        int i = 0 ;
+                        String temp  = split_tokens[1];
+                        String[] new_split_tokens = temp.split("$");
+                        while (i < new_split_tokens.length) {
+                            String item = new_split_tokens[i];
+                            String[] kvtoken = item.split(":");
+                            if (kvtoken.length == 2) {
+                                put_data(kvtoken[0], kvtoken[1]);
+                            }
+                            i++;
+                        }
+
                     }
                 }
-            }
-            catch (SocketTimeoutException e) {
+            } catch (SocketTimeoutException e) {
                 Log.e("venkat", "ClientTask timeout");
 
-            }
-            catch (EOFException e) {
+            } catch (EOFException e) {
                 Log.e("venkat", "ClientTask eof");
-            }
-            catch (StreamCorruptedException e ){
+            } catch (StreamCorruptedException e) {
                 Log.e("venkat", "stream corrupt");
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
                 Log.e("venkat", "ClientTask socket IOException");
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
             }
-            String output_message ="summa";
+            String output_message = "summa";
             publishProgress(new String[]{output_message});
             return null;
         }
-        protected void onProgressUpdate(String...strings) {
-            Log.d("venkat","in publish progress");
+
+        protected void onProgressUpdate(String... strings) {
+            Log.d("venkat", "in publish progress");
             return;
         }
+    }
+
+    private String get_kv_range(String start, String end) throws NoSuchAlgorithmException {
+        String outString = "";
+        File dir = getContext().getFilesDir();
+        File[] files = dir.listFiles();
+        for (File file : files) {
+            if (file.isFile()) {
+                String fname = file.getName();
+                if (hash_in_range(genHash(fname),start,end)) {
+                    String key = fname;
+                    String value = get_data(key);
+                    outString += key;
+                    outString += ":";
+                    outString += value;
+                    outString += "$";
+                    remove_data(key);
+                }
+            }
+        }
+        if (outString.length() == 0) {
+            outString=" ";
+        }
+        return outString;
+
     }
 
     private class ClientTask extends AsyncTask<String, Void, Void> {
@@ -819,7 +864,7 @@ public class SimpleDhtProvider extends ContentProvider {
             try {
                 Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(port));
-                socket.setSoTimeout(500);
+                socket.setSoTimeout(1000);
                 DataOutputStream out = new DataOutputStream(socket.getOutputStream());
                 out.writeUTF(method + "#" + selection + "#" + myPort);
                 out.flush();

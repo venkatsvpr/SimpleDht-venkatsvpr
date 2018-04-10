@@ -39,6 +39,8 @@ public class SimpleDhtActivity extends Activity {
                 new OnTestClickListener(tv, getContentResolver()));
 
 
+
+
     }
 
     @Override
