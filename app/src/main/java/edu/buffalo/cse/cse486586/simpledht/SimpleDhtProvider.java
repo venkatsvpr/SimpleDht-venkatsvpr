@@ -190,7 +190,7 @@ public class SimpleDhtProvider extends ContentProvider {
     public Uri insert(Uri uri, ContentValues values) {
         String key_val = values.getAsString("key");
         String data = values.getAsString("value");
-        Log.d("venkat"," insert "+key_val+" "+data+" peercount "+peerCount);
+        Log.d("venkat"," insert "+key_val+" "+data+" peercount "+peerCount+" peer_info "+peer_info);
         if (peerCount == 0) {
             Log.d("venkat", " insert  " + key_val + " " + data);
             put_data(key_val, data);
@@ -200,18 +200,19 @@ public class SimpleDhtProvider extends ContentProvider {
             String hashkey = null;
             try {
                 hashkey = genHash(key_val);
+
+                if (hash_in_range(hashkey, myPort, peer_info))
+                {
+                    Log.d("venkat"," forceputting in the next "+peer_info);
+                    send_message(peer_info, key_val + ":" + data, "force-put");
+                } else {
+                    Log.d("venkat","put in next "+peer_info);
+                    String ret = send_message(peer_info, key_val + ":" + data, "put");
+                }
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
             }
 
-            if (hash_in_range(hashkey, myPort, peer_info))
-            {
-                Log.d("venkat"," forceputting in the next "+peer_info);
-                send_message(peer_info, key_val + ":" + data, "force-put");
-            } else {
-                Log.d("venkat","put in next "+peer_info);
-                String ret = send_message(peer_info, key_val + ":" + data, "put");
-            }
         }
             // TODO Auto-generated method stub
         return uri;
@@ -366,9 +367,12 @@ public class SimpleDhtProvider extends ContentProvider {
             e.printStackTrace();
         }
 
+        Log.d("venkat","checking if hash is in between "+start_hash+" and "+end_hash +" input hash "+hash);
 
-        if ((start_hash.compareTo(hash) <0) && (end_hash.compareTo(hash)>0)) {
-            return true;
+        if (start_hash.compareTo(end_hash) < 0) {
+            if ((start_hash.compareTo(hash) <0) && (end_hash.compareTo(hash) > 0)) {
+                return true;
+            }
         }
 
         if (start_hash.compareTo(end_hash) > 0) {
@@ -383,7 +387,7 @@ public class SimpleDhtProvider extends ContentProvider {
             Log.d("venkat","send message: port: "+port+" selection: "+selection+" method:"+method);
             Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                     Integer.parseInt(port));
-            socket.setSoTimeout(1000);
+            socket.setSoTimeout(1500);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             out.writeUTF(method + "#" + selection + "#" + myPort);
             out.flush();
@@ -398,6 +402,8 @@ public class SimpleDhtProvider extends ContentProvider {
             Log.d ("venkat" , " myport: "+myPort+" peer: "+peer_info);
             return message;
         }
+
+
         catch (SocketTimeoutException e) {
             Log.e("venkat", "ClientTask timeout");
 
@@ -443,6 +449,11 @@ public class SimpleDhtProvider extends ContentProvider {
         /* Reference :
          1) Idea : https://stackoverflow.com/questions/5694385/getting-the-filenames-of-all-files-in-a-folder
          */
+        try {
+            Log.d("venkat"," dumping the contents from getMyValues peer_count:"+peerCount+" peer"+peer_info +"myhash "+myhash+" peerhash "+genHash(peer_info));
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
         File dir = getContext().getFilesDir();
         File[] files = dir.listFiles();
 
@@ -452,6 +463,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 String value = get_data(key);
                 Log.d("venkat", key+":"+value);
                 mCursor.addRow(new String[]{key , value});
+                Log.d("venkat","["+key+"]:"+value);
             }
         }
 
@@ -493,51 +505,39 @@ public class SimpleDhtProvider extends ContentProvider {
                 sorted_ports[i] = getPort(i);
             }
         }
-
+        Log.d("venkat","sorted peer list "+Arrays.toString(sorted_ports));
         String firstport = null;
         String prevport = null;
+
         for (i = 0; i <=4; i++) {
             if (!sorted_ports[i].equals("NA")) {
                 if (firstport == null) {
                     firstport = sorted_ports[i];
                 }
-
                 if (prevport != null) {
-                    send_message(prevport,sorted_ports[i]+":"+peerCount,"peer");
+                    if (prevport.equals(myPort)) {
+                        String old_peer_info = peer_info;
+                        Log.d("venkat","to send peer info "+prevport+": peer:"+sorted_ports[i]);
+                        peer_info = sorted_ports[i];
+                        /* tell the old peer info to rehash */
+                        if (!old_peer_info.equals("NA")) {
+                            send_message(old_peer_info, myPort + ":" + peer_info, "rehash");
+                        }
+                    }
+                    else {
+                        Log.d("venkat","to send peer info "+prevport+": peer:"+sorted_ports[i]);
+                        send_message(prevport, sorted_ports[i] + ":" + peerCount, "peer");
+                    }
                 }
                 prevport = sorted_ports[i];
             }
         }
 
         if (!firstport.equals(prevport)) {
-            send_message(prevport,firstport+":"+peerCount,"peer");
+            Log.d("venkat","to send peer info "+prevport+": peer:"+firstport);
+            send_message(prevport, firstport + ":" + peerCount, "peer");
         }
 
-
-
-      /* have to sort this  out */
-        /*
-
-            if (remote_hash[i] == null) {
-                i--;
-                break;
-            }
-            portInfo = getPort(i);
-            nextPortInfo = getPort(i+1);
-
-            if (portInfo.equals(myPort)) {
-                peer_info = nextPortInfo;
-                continue;
-            }
-
-            if (nextPortInfo == null) {
-                nextPortInfo = getPort(0);
-            }
-            Log.d("venkat","sending peer update to"+portInfo+" with peer as "+nextPortInfo);
-            send_message(portInfo,nextPortInfo,"peer");
-        }
-        return;
-        */
     }
 
     private class  ServerTask extends AsyncTask<ServerSocket, String, Void> {
@@ -554,13 +554,13 @@ public class SimpleDhtProvider extends ContentProvider {
                     Log.d("venkat", "Going to connect to the peer... myPort is" + myPort);
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(default_remote_port));
-                    socket.setSoTimeout(1000);
+                    socket.setSoTimeout(1500);
                     DataOutputStream out = new DataOutputStream(socket.getOutputStream());
                     out.writeUTF("connect#" + myPort);
                     out.flush();
 
                     DataInputStream in = new DataInputStream(socket.getInputStream());
-                    String message = null;
+                    String message = null;d
                     message = in.readUTF();
                     Log.d("venkat", "Read ack reply:" + message);
                     out.close();
@@ -707,6 +707,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
                         String keyvalue = split_tokens[1];
                         String[] new_split_tokens = keyvalue.split(":");
+                        Log.d("venkat"," checking for key "+new_split_tokens[0]);
                         if (hash_in_range(genHash(new_split_tokens[0]), myPort, peer_info)) {
                             send_message(peer_info, split_tokens[1], "force-put");
                         } else {
@@ -754,8 +755,20 @@ public class SimpleDhtProvider extends ContentProvider {
                         String current_info = peer_info;
                         peer_info = subsplit[0];
                         peerCount = Integer.parseInt(subsplit[1]);
+                        Log.d("venkat","peer info is changing .. from "+current_info+" to "+peer_info+" going to request rehash ");
 
-                        if (!current_info.equals("NA")) {
+                        if (current_info.equals("NA")) {
+                            if (!peer_info.equals("NA")) {
+                                String tmessage = get_kv_range(myPort,peer_info);
+                                if (tmessage.length()>2 ) {
+                                    String mess2 = peer_info + "#" + tmessage + "#fpush#";
+                                    Log.d("venkat", "Message input :" + tmessage);
+                                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
+                                }
+                            }
+                        }
+                        else if (!current_info.equals("NA")) {
+                            Log.d("venkat","peer info is changing .. from "+current_info+" to "+peer_info+" going to request rehash ");
                             String mess2 = current_info + "#" +myPort + ":"+ peer_info + "#rehash#";
                             Log.d("venkat", "Message input :" + message);
                             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
@@ -769,10 +782,11 @@ public class SimpleDhtProvider extends ContentProvider {
                         String temp_string = split_tokens[1];
                         String[] new_split_tokens = temp_string.split(":");
                         String tmessage = get_kv_range(new_split_tokens[0],new_split_tokens[1]);
-
-                        String mess2 = new_split_tokens[1] + "#" +tmessage+"#fpush#";
-                        Log.d("venkat", "Message input :" + tmessage);
-                        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
+                        if (tmessage.length()  > 2) {
+                            String mess2 = new_split_tokens[1] + "#" + tmessage + "#fpush#";
+                            Log.d("venkat", "Message input :" + tmessage);
+                            new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, mess2, myPort);
+                        }
                     }
                     else if (split_tokens[0].equals("fpush")) {
                         DataOutputStream out_print = new DataOutputStream(accept.getOutputStream());
@@ -781,10 +795,13 @@ public class SimpleDhtProvider extends ContentProvider {
 
                         int i = 0 ;
                         String temp  = split_tokens[1];
-                        String[] new_split_tokens = temp.split("$");
+                        String[] new_split_tokens = temp.split("_");
+                        Log.d("venkat","data :"+temp);
                         while (i < new_split_tokens.length) {
                             String item = new_split_tokens[i];
+                            Log.d("venkat","item"+item);
                             String[] kvtoken = item.split(":");
+                            Log.d("venkat"," item: "+kvtoken+" length "+kvtoken.length);
                             if (kvtoken.length == 2) {
                                 put_data(kvtoken[0], kvtoken[1]);
                             }
@@ -817,6 +834,8 @@ public class SimpleDhtProvider extends ContentProvider {
     }
 
     private String get_kv_range(String start, String end) throws NoSuchAlgorithmException {
+        Log.d ("venkat","get_kv_range called for "+start+" to "+end);
+        Log.d ("venkat","all keys from "+genHash(avdname.get(start))+" to "+genHash(avdname.get(end))+" will be colelcted");
         String outString = "";
         File dir = getContext().getFilesDir();
         File[] files = dir.listFiles();
@@ -825,11 +844,12 @@ public class SimpleDhtProvider extends ContentProvider {
                 String fname = file.getName();
                 if (hash_in_range(genHash(fname),start,end)) {
                     String key = fname;
+                    Log.d("venkat","hash of key "+key+" is in range which is "+genHash(key));
                     String value = get_data(key);
                     outString += key;
                     outString += ":";
                     outString += value;
-                    outString += "$";
+                    outString += "_";
                     remove_data(key);
                 }
             }
@@ -879,9 +899,9 @@ public class SimpleDhtProvider extends ContentProvider {
                 Log.d ("venkat" , " myport: "+myPort+" peer: "+peer_info);
                 return message;
             }
+
             catch (SocketTimeoutException e) {
                 Log.e("venkat", "ClientTask timeout");
-
             }
             catch (EOFException e) {
                 Log.e("venkat", "ClientTask eof");

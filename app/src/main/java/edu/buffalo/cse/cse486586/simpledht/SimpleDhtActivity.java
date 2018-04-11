@@ -37,6 +37,8 @@ public class SimpleDhtActivity extends Activity {
         tv.setMovementMethod(new ScrollingMovementMethod());
         findViewById(R.id.button3).setOnClickListener(
                 new OnTestClickListener(tv, getContentResolver()));
+        findViewById(R.id.button1).setOnClickListener(
+                new OnVenkat(tv, getContentResolver()));
 
 
 
