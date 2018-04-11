@@ -560,7 +560,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     out.flush();
 
                     DataInputStream in = new DataInputStream(socket.getInputStream());
-                    String message = null;d
+                    String message = null;
                     message = in.readUTF();
                     Log.d("venkat", "Read ack reply:" + message);
                     out.close();
