@@ -38,7 +38,9 @@ import android.util.Log;
 /* Referenses:
    1) https://beginnersbook.com/2013/12/hashmap-in-java-with-example/  -  had simple code and used this
    to understand about Hashmap. No code is copied.
-
+   2) snippets referred from online sources like stackoverflow, orcale site, android studio
+   not directly copied.
+   3) code used from previous projects
  */
 public class SimpleDhtProvider extends ContentProvider {
     static Lock get_lock = new ReentrantLock();
